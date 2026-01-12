@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="eu">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EduFit - PDF Koadratu Perfektua</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root { --primary: #1e40af; --secondary: #3b82f6; --success: #10b981; --bg: #f1f5f9; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); padding: 20px; }
+        
+        .main-container { max-width: 900px; margin: auto; background: white; padding: 25px; border-radius: 15px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
+        
+        /* Inprimakia */
+        .grid-form { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 30px; background: #f8fafc; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0; }
+        .input-box { display: flex; flex-direction: column; }
+        label { font-weight: bold; font-size: 0.85rem; color: #475569; }
+        input { padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; margin-top: 5px; }
+        .full { grid-column: span 2; }
+
+        .btn-group { display: flex; gap: 10px; grid-column: span 2; margin-top: 10px; }
+        button { flex: 1; padding: 12px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; color: white; transition: 0.3s; }
+        .btn-primary { background: var(--primary); }
+        .btn-pdf { background: var(--success); }
+
+        /* PDF EREMUA - GAKOA HEMEN DAGO */
+        #txosten-eremua { 
+            width: 800px; /* A4 zabalera proportzionala pixelatara */
+            margin: 20px auto;
+            padding: 40px;
+            background: white;
+            box-sizing: border-box;
+            border: 1px solid #eee; /* Pantailan bakarrik ikusteko */
+        }
+
+        .feedback-card { 
+            border-left: 6px solid var(--primary); 
+            background: #f8fafc; 
+            padding: 15px; 
+            margin-bottom: 20px; 
+            border-radius: 0 8px 8px 0;
+            page-break-inside: avoid; 
+        }
+
+        .progress-bg { background: #e2e8f0; border-radius: 10px; height: 10px; width: 100%; margin: 8px 0; overflow: hidden; }
+        .progress-bar { height: 100%; border-radius: 10px; transition: width 0.5s; }
+
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #cbd5e1; padding: 10px; text-align: left; font-size: 0.85rem; }
+        th { background: #f1f5f9; color: var(--primary); }
+
+        .no-print { display: none; } /* PDFan botoiak kentzeko */
+    </style>
+</head>
+<body>
+
+<div class="main-container">
+    <h1 style="text-align: center; color: var(--primary);"><i class="fas fa-file-medical-alt"></i> EduFit Erregistroa</h1>
+    
+    <div class="grid-form">
+        <div class="input-box full"><label>Ikaslearen Izena</label><input type="text" id="nom" placeholder="Izena eta Abizena"></div>
+        <div class="input-box"><label>Course Navette (Aldiak)</label><input type="number" id="cn" value="0" step="0.5"></div>
+        <div class="input-box"><label>Jauzi Horizontala (cm)</label><input type="number" id="jh" value="0"></div>
+        <div class="input-box"><label>Baloi Jaurtiketa (m)</label><input type="number" id="bj" value="0" step="0.1"></div>
+        <div class="input-box"><label>Malgutasuna (cm)</label><input type="number" id="ml" value="0"></div>
+        <div class="input-box full"><label>50m Abiadura (seg)</label><input type="number" id="vel" value="0" step="0.01"></div>
+        
+        <div class="btn-group">
+            <button class="btn-primary" onclick="gordeDatuak()"><i class="fas fa-save"></i> GORDE</button>
+            <button class="btn-pdf" onclick="deskargatuPDF()"><i class="fas fa-download"></i> PDF DESKARGATU</button>
+        </div>
+    </div>
+
+    <div id="txosten-eremua">
+        <div id="feedback-dinamikoa">
+            <h2 style="text-align: center; color: #94a3b8; margin-top: 50px;">Datuen zain...</h2>
+        </div>
+        
+        <div id="taula-historikoa" style="margin-top: 40px;">
+            <h3 style="color: var(--primary); border-bottom: 2px solid var(--primary); padding-bottom: 5px;">Laburpen Taula</h3>
+            <table id="taula-pdf">
+                <thead>
+                    <tr>
+                        <th>Ikaslea</th>
+                        <th>C.N.</th>
+                        <th>Jauzia</th>
+                        <th>Baloia</th>
+                        <th>Malgu.</th>
+                        <th>Abiad.</th>
+                    </tr>
+                </thead>
+                <tbody id="lista-gorputza"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+    window.onload = erakutsiTaula;
+
+    function gordeDatuak() {
+        const izena = document.getElementById('nom').value.trim();
+        if (!izena) return alert("Izena beharrezkoa da!");
+
+        const f = {
+            id: Date.now(),
+            izena: izena,
+            navette: parseFloat(document.getElementById('cn').value) || 0,
+            jauzi: parseInt(document.getElementById('jh').value) || 0,
+            baloi: parseFloat(document.getElementById('bj').value) || 0,
+            malgu: parseInt(document.getElementById('ml').value) || 0,
+            vel: parseFloat(document.getElementById('vel').value) || 0
+        };
+
+        let db = JSON.parse(localStorage.getItem('edufit_final_v4')) || [];
+        db.push(f);
+        localStorage.setItem('edufit_final_v4', JSON.stringify(db));
+
+        sortuFeedbackBisuala(f);
+        erakutsiTaula();
+        document.getElementById('nom').value = "";
+    }
+
+    function sortuFeedbackBisuala(f) {
+        const div = document.getElementById('feedback-dinamikoa');
+        
+        const lerroak = [
+            { t: "Course Navette", v: f.navette, m: 8, i: "fa-heart", c: "#ef4444", txt: f.navette < 6 ? "Gaitasun aerobikoa hobetu behar duzu bihotza indartzeko. Astean 3 aldiz ariketa jarraitua egitea gomendatzen dizugu." : "Bikain! Zure bihotza eta birikak oso eraginkorrak dira oxigenoa banatzeko. Mantendu maila hau osasun kardiobaskularra bermatzeko." },
+            { t: "Jauzi Horizontala", v: f.jauzi, m: 180, i: "fa-bolt", c: "#f59e0b", txt: f.jauzi < 150 ? "Hanketako indar leherkorra landu behar duzu. Jauziek hezurren dentsitatea eta oreka hobetzen laguntzen dute epe luzera." : "Oso ondo! Hanketako indarrak lesioetatik babesten zaitu eta eguneroko bizitzan bizkortasun handiagoa ematen dizu." },
+            { t: "Baloi Jaurtiketa", v: f.baloi, m: 6, i: "fa-fist-raised", c: "#10b981", txt: f.baloi < 4 ? "Goiko trenaren indarra landu beharko zenuke. Enborreko muskulatura sendoa izatea ezinbestekoa da bizkarreko minak ekiditeko." : "Enborreko eta besoko indar ona. Honek jarrera egokia mantentzen eta bizkarreko karga muskularrak murrizten laguntzen dizu." },
+            { t: "Malgutasuna", v: f.malgu, m: 10, i: "fa-child", c: "#3b82f6", txt: f.malgu < 5 ? "Zure muskuluak zurrun daude. Egunero 10 minutu luzatzeak artikulazioen osasuna hobetuko du eta lesio arriskua nabarmen murriztuko du." : "Malgutasun bikaina! Muskulu elastikoek mugikortasun handia eta bizkarrezur osasuntsua bermatzen dizute." },
+            { t: "50m Abiadura", v: f.vel, m: 8, i: "fa-tachometer-alt", c: "#8b5cf6", txt: f.vel > 9 ? "Koordinazioa eta abiadura hobetu daitezke. Teknika ariketekin zure nerbio-sistema eta giharren arteko konexioa azkartuko duzu." : "Abiadura eta erreakzio gaitasun bikaina! Zure zuntz muskularrak eta nerbio-sistema oso modu sinkronizatuan lan egiten dute." }
+        ];
+
+        let html = `<h2 style="color:var(--primary); margin-bottom:20px; border-bottom: 2px solid #eee; padding-bottom:10px;">${f.izena}-(r)en Osasun Txostena</h2>`;
+        
+        lerroak.forEach(l => {
+            let portzentaia = Math.min(100, (l.v / l.m) * 100);
+            if(l.t === "50m Abiadura") portzentaia = Math.min(100, (l.m / l.v) * 100);
+
+            html += `
+                <div class="feedback-card">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <span style="font-weight:bold;"><i class="fas ${l.i}" style="color:${l.c}"></i> ${l.t}</span>
+                        <span style="color:var(--primary); font-weight:bold;">${l.v}</span>
+                    </div>
+                    <div class="progress-bg"><div class="progress-bar" style="width:${portzentaia}%; background:${l.c}"></div></div>
+                    <p style="font-size:0.9rem; margin-top:8px; line-height:1.4;">${l.txt}</p>
+                </div>`;
+        });
+        div.innerHTML = html;
+    }
+
+    function erakutsiTaula() {
+        const db = JSON.parse(localStorage.getItem('edufit_final_v4')) || [];
+        const tbody = document.getElementById('lista-gorputza');
+        tbody.innerHTML = "";
+        db.slice(-5).forEach(i => {
+            tbody.innerHTML += `<tr><td>${i.izena}</td><td>${i.navette}</td><td>${i.jauzi}</td><td>${i.baloi}</td><td>${i.malgu}</td><td>${i.vel}</td></tr>`;
+        });
+    }
+
+    function deskargatuPDF() {
+        const element = document.getElementById('txosten-eremua');
+        const izena = document.getElementById('nom').value || "EduFit_Txostena";
+        
+        const opt = {
+            margin:       [10, 5, 10, 5],
+            filename:     `${izena}.pdf`,
+            image:        { type: 'jpeg', quality: 0.98 },
+            html2canvas:  { 
+                scale: 2, 
+                width: 800, // Zabalera birtuala behartu
+                windowWidth: 800,
+                useCORS: true 
+            },
+            jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        };
+
+        html2pdf().set(opt).from(element).save();
+    }
+</script>
+
+</body>
+</html>
